@@ -207,12 +207,14 @@ create_image () {
     time docker build --build-arg CODE_VERSION=$sha_tag -t $namespace/$image:$sha_tag \
         -f dockerfiles/$dockerfile $CLIPPER_ROOT
     docker tag $namespace/$image:$sha_tag $namespace/$image:$version_tag
+    docker tag $namespace/$image:$sha_tag $namespace/$image:latest
 
     if [ "$publish" = true ] && [ "$public" = true ] ; then
         echo "Publishing $namespace/$image:$sha_tag"
         docker push $namespace/$image:$sha_tag
         echo "Publishing $namespace/$image:$version_tag"
         docker push $namespace/$image:$version_tag
+        docker push $namespace/$image:latest
 
         # If the version is normal versioned release (not develop and not a release candidate),
         # We also tag and publish an image tagged
@@ -242,8 +244,11 @@ build_images () {
 
     # Build Clipper core images
     create_image lib_base ClipperLibBaseDockerfile $private
-    create_image query_frontend QueryFrontendDockerfile $public
-    create_image management_frontend ManagementFrontendDockerfile $public
+
+    create_image frontend_base FrontendBaseDockerfile $private
+    create_image query_frontend QueryFrontendDockerfile $public &
+    create_image management_frontend ManagementFrontendDockerfile $public &
+    wait
     create_image unittests ClipperTestsDockerfile  $private
 
     # Build containers

@@ -1,22 +1,34 @@
 package ai.clipper.spark
 
+import java.io.File
 import java.util.ArrayList
 
 import ai.clipper.container.ClipperModel
 import ai.clipper.container.data.{DataType, DoubleVector, SerializableString}
+import ml.combust.bundle.BundleFile
+import ml.combust.bundle.dsl.Bundle
+import ml.combust.mleap
+import ml.combust.mleap.runtime
+import ml.combust.mleap.runtime._
+import ml.combust.mleap.runtime.transformer.Transformer
 import org.apache.spark.SparkContext
-import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.bundle.SparkBundleContext
+import org.apache.spark.{ml => sparkml}
 import org.apache.spark.mllib.classification.{LogisticRegressionModel, NaiveBayesModel, SVMModel}
 import org.apache.spark.mllib.clustering.{BisectingKMeansModel, GaussianMixtureModel, KMeansModel}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.recommendation.MatrixFactorizationModel
 import org.apache.spark.mllib.regression.{IsotonicRegressionModel, LassoModel, LinearRegressionModel, RidgeRegressionModel}
 import org.apache.spark.mllib.tree.model.{DecisionTreeModel, GradientBoostedTreesModel, RandomForestModel}
+import org.apache.spark.sql.Dataset
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
+import resource.managed
 
 import scala.collection.JavaConversions._
+import scala.collection.immutable
 import scala.reflect.runtime.universe
+import scala.util.Try
 
 abstract class SparkModelContainer extends ClipperModel[DoubleVector] {
 
@@ -35,17 +47,89 @@ abstract class SparkModelContainer extends ClipperModel[DoubleVector] {
 
 abstract class MLlibContainer extends SparkModelContainer {
 
-  def init(sc: SparkContext, model: MLlibModel): Unit
+  def init(sc: SparkContext, model: MLlibModel): this.type
 
   override def predict(xs: List[Vector]): List[Float]
 
 }
 abstract class PipelineModelContainer extends SparkModelContainer {
 
-  def init(sc: SparkContext, model: PipelineModel): Unit
+  def init(sc: SparkContext, model: sparkml.PipelineModel): this.type
 
   override def predict(xs: List[Vector]): List[Float]
 
+}
+case class MLeapModel(transformer: mleap.runtime.transformer.Transformer, bundlePath:String) {
+  import mleap.runtime.{LeapFrame, Row, LocalDataset, Dataset}
+  import ml.combust.mleap.core.util.VectorConverters
+  import org.apache.spark.ml.linalg.Vector
+  def predict(rows: Seq[Vector]): Seq[Double] = {
+    val frame = LeapFrame(transformer.inputSchema, LocalDataset(rows.map(features=>Row(VectorConverters.sparkVectorToMleapTensor(features)))))
+    val out: Dataset = transformer.transform(frame).get.dataset
+    out.map {row => row.last.asInstanceOf[Double]}.toSeq
+  }
+  def predict(features: Vector) : Double = predict(List(features)).head
+  def save(path: String): Unit = {
+    new File(path).mkdirs()
+    // assume path is directory
+    import mleap.runtime.MleapSupport._
+    val bundlePath: String = s"jar:file:$path/bundle.zip"
+    for (bf <- managed(BundleFile(bundlePath))) {
+      transformer.writeBundle.save(bf)
+    }
+  }
+}
+
+object MLeapModel {
+  def apply(sparkTransformer: sparkml.Transformer, dataset: Dataset[_]): MLeapModel = {
+    import mleap.spark.SparkSupport._
+    val path: String = {
+      val fileName: String = scala.util.Random.alphanumeric.take(20).mkString
+      s"/tmp/$fileName.zip"
+    }
+    val bundlePath: String = s"jar:file:$path"
+    implicit val sbc: SparkBundleContext = SparkBundleContext().withDataset(sparkTransformer.transform(dataset))
+    for (bf <- managed(BundleFile(bundlePath))) {
+      sparkTransformer.writeBundle.save(bf)
+    }
+    apply(path)
+  }
+  def apply(path: String): MLeapModel = {
+    val bundlePath: String = s"jar:file:$path${if (path.endsWith(".zip")) "" else "/bundle.zip"}"
+    import mleap.runtime.MleapSupport._
+    val transformer: Transformer = {
+      (for (bf <- managed(BundleFile(bundlePath))) yield {
+        bf.loadMleapBundle().get
+      }).opt.get.root
+    }
+    apply(transformer, bundlePath)
+  }
+}
+//case class MLeapNativeModel(transformer: mleap.runtime.transformer.Transformer, path: String) extends MLeapModel
+//case class MLeapSparkModel(sparkTransformer: sparkml.Transformer, dataset: Dataset[_])  extends MLeapModel {
+//  import mleap.spark.SparkSupport._
+//  import mleap.runtime.MleapSupport._
+//  import scala.util.Random
+//  val path: String = {
+//    val fileName: String = Random.alphanumeric.take(20).mkString
+//    s"/tmp/$fileName.zip"
+//  }
+//  val transformer: Transformer = {
+//    val bundleFilePath: String = s"jar:file:$path"
+//    implicit val sbc: SparkBundleContext = SparkBundleContext().withDataset(sparkTransformer.transform(dataset))
+//    for (bf <- managed(BundleFile(bundleFilePath))) {
+//      sparkTransformer.writeBundle.save(bf)
+//    }
+//    (for (bf <- managed(BundleFile(bundleFilePath))) yield {
+//      bf.loadMleapBundle().get
+//    }).opt.get.root
+//  }
+//}
+
+class MLeapModelBundleContainer extends SparkModelContainer {
+  var model: Option[MLeapModel] = None
+  def init(model: MLeapModel): this.type = {this.model = Some(model); this}
+  override def predict(xs: List[Vector]): List[Float] = model.get.predict(xs.map(_.asML)).map(_.toFloat).toList
 }
 
 sealed abstract class MLlibModel {

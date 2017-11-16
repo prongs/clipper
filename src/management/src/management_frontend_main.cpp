@@ -12,8 +12,8 @@ int main(int argc, char* argv[]) {
 
   // clang-format off
   options.add_options()
-    ("redis_ip", "Redis address", cxxopts::value<std::string>()->default_value("localhost"))
-    ("redis_port", "Redis port", cxxopts::value<int>()->default_value("6379"));
+    ("redis_ip", "Redis address", cxxopts::value<std::string>()->default_value(clipper::DEFAULT_REDIS_ADDRESS))
+    ("redis_port", "Redis port", cxxopts::value<int>()->default_value(std::to_string(clipper::DEFAULT_REDIS_PORT)));
   // clang-format on
   options.parse(argc, argv);
 

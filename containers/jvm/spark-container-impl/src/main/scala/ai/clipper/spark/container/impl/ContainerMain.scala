@@ -13,7 +13,7 @@ object ContainerMain {
 
     val modelPath = sys.env("CLIPPER_MODEL_PATH")
     val modelName = sys.env("CLIPPER_MODEL_NAME")
-    val modelVersion = sys.env("CLIPPER_MODEL_VERSION").toInt
+    val modelVersion = sys.env("CLIPPER_MODEL_VERSION")
 
     val clipperAddress = sys.env.getOrElse("CLIPPER_IP", "127.0.0.1")
     val clipperPort = sys.env.getOrElse("CLIPPER_PORT", "7000").toInt
@@ -21,17 +21,22 @@ object ContainerMain {
     val conf = new SparkConf()
       .setAppName("ClipperSparkContainer")
       .setMaster("local")
-    val sc = new SparkContext(conf)
-    // Reduce logging noise
-    sc.parallelize(Seq(""))
-      .foreachPartition(x => {
-        import org.apache.commons.logging.LogFactory
-        import org.apache.log4j.{Level, LogManager}
-        LogManager.getRootLogger().setLevel(Level.WARN)
-        val log = LogFactory.getLog("EXECUTOR-LOG:")
-        log.warn("START EXECUTOR WARN LOG LEVEL")
-      })
+    lazy val sc: SparkContext = {
+      val sparkContext = new SparkContext(conf)
+      // Reduce logging noise
+      sparkContext.parallelize(Seq(""))
+        .foreachPartition(x => {
+          import org.apache.commons.logging.LogFactory
+          import org.apache.log4j.{Level, LogManager}
+          LogManager.getRootLogger().setLevel(Level.WARN)
+          val log = LogFactory.getLog("EXECUTOR-LOG:")
+          log.warn("START EXECUTOR WARN LOG LEVEL")
+        })
+      sparkContext
+    }
+    println("Lazy spark context created")
     val container: SparkModelContainer = Clipper.loadSparkModel(sc, modelPath)
+    println(s"Loaded spark model: $container")
     val parser = new DoubleVector.Parser
 
     while (true) {

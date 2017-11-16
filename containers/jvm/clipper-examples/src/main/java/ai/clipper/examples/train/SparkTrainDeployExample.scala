@@ -15,9 +15,10 @@ class LogisticRegressionContainer extends MLlibContainer {
 
   var model: Option[MLlibModel] = None
 
-  override def init(sc: SparkContext, m: MLlibModel) {
+  override def init(sc: SparkContext, m: MLlibModel):this.type = {
     println("Initializing container")
     model = Some(m)
+    this
   }
 
   override def predict(xs: List[Vector]): List[Float] = {
@@ -56,16 +57,16 @@ object Train {
       .foreachPartition(x => {
         import org.apache.commons.logging.LogFactory
         import org.apache.log4j.{Level, LogManager}
-        LogManager.getRootLogger().setLevel(Level.WARN)
+        LogManager.getRootLogger.setLevel(Level.WARN)
         val log = LogFactory.getLog("EXECUTOR-LOG:")
         log.warn("START EXECUTOR WARN LOG LEVEL")
       })
 
-    val sparkHome = sys.env.get("SPARK_HOME").get
+    val sparkHome = sys.env("SPARK_HOME")
     // Load and parse the data file.
     val data = MLUtils.loadLibSVMFile(
       sc,
-      s"${sparkHome}/data/mllib/sample_libsvm_data.txt")
+      s"$sparkHome/data/mllib/sample_libsvm_data.txt")
     // Split the data into training and test sets (30% held out for testing)
     val splits = data.randomSplit(Array(0.7, 0.3))
     val (trainingData, testData) = (splits(0), splits(1))
@@ -79,7 +80,7 @@ object Train {
     println(s"Trained model with ${model.model.numFeatures} features\n")
 
     val clipperHost = sys.env.getOrElse("CLIPPER_HOST", "localhost")
-    val clipperVersion = sys.env.getOrElse("CLIPPER_MODEL_VERSION", "1").toInt
+    val clipperVersion = sys.env.getOrElse("CLIPPER_MODEL_VERSION", "1")
     val sshKeyPath = sys.env.get("SSH_KEY_PATH")
     val sshUser = sys.env.get("SSH_USER")
 

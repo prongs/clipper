@@ -35,7 +35,7 @@ public class RPC<I extends DataVector<?>> {
   /**
    * This method blocks until the RPC connection is ended
    */
-  public void start(final ClipperModel<I> model, final String modelName, int modelVersion,
+  public void start(final ClipperModel<I> model, final String modelName, String modelVersion,
       final String host, final int port) throws UnknownHostException {
     InetAddress address = InetAddress.getByName(host);
     String ip = address.getHostAddress();
@@ -68,7 +68,7 @@ public class RPC<I extends DataVector<?>> {
     return eventHistory.getEvents();
   }
 
-  private void serveModel(ClipperModel<I> model, String modelName, int modelVersion,
+  private void serveModel(ClipperModel<I> model, String modelName, String modelVersion,
       final ZMQ.Context context, String ip, int port)
       throws NoSuchFieldException, IllegalArgumentException {
     int inputHeaderBufferSize = 0;
@@ -314,12 +314,12 @@ public class RPC<I extends DataVector<?>> {
   }
 
   private void sendContainerMetadata(
-      ZMQ.Socket socket, ClipperModel<I> model, String modelName, int modelVersion) {
+      ZMQ.Socket socket, ClipperModel<I> model, String modelName, String modelVersion) {
     socket.send("", ZMQ.SNDMORE);
     socket.send(
         DataUtils.getBytesFromInts(ContainerMessageType.NewContainer.getCode()), ZMQ.SNDMORE);
     socket.send(modelName, ZMQ.SNDMORE);
-    socket.send(String.valueOf(modelVersion), ZMQ.SNDMORE);
+    socket.send(modelVersion, ZMQ.SNDMORE);
     socket.send(String.valueOf(model.getInputType().getCode()));
     eventHistory.insert(RPCEventType.SentContainerMetadata);
     System.out.println("Sent container metadata!");
