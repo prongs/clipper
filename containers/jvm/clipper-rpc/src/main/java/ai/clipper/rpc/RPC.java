@@ -267,6 +267,7 @@ public class RPC<I extends DataVector<?>> {
       responseBuffer.order(ByteOrder.LITTLE_ENDIAN);
     }
     responseBuffer.rewind();
+    responseBuffer.limit(responseBuffer.capacity());
 
     int numOutputs = predictions.size();
     // Write the number of outputs to the buffer

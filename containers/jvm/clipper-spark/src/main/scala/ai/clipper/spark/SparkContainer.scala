@@ -1,16 +1,14 @@
 package ai.clipper.spark
 
 import java.io.File
-import java.util.ArrayList
+import java.util
 
 import ai.clipper.container.ClipperModel
 import ai.clipper.container.data.{DataType, DoubleVector, SerializableString}
 import ml.combust.bundle.BundleFile
-import ml.combust.bundle.dsl.Bundle
 import ml.combust.mleap
-import ml.combust.mleap.runtime
-import ml.combust.mleap.runtime._
 import ml.combust.mleap.runtime.transformer.Transformer
+import ml.combust.mleap.tensor.DenseTensor
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.bundle.SparkBundleContext
 import org.apache.spark.{ml => sparkml}
@@ -32,13 +30,17 @@ import scala.util.Try
 
 abstract class SparkModelContainer extends ClipperModel[DoubleVector] {
 
-  override def getInputType : DataType = {
+  override def getInputType: DataType = {
     DataType.Doubles
   }
 
-  final override def predict(inputVectors: ArrayList[DoubleVector]): ArrayList[SerializableString] = {
-    val inputs = inputVectors.map(x => Vectors.dense(new Array[Double](x.getData.remaining()))).toList
-    new ArrayList(predict(inputs).map(x => new SerializableString(x.toString)))
+  final override def predict(inputVectors: util.ArrayList[DoubleVector]): util.ArrayList[SerializableString] = {
+    val inputs = inputVectors.map { x =>
+      val doubles = new Array[Double](x.getData.remaining)
+      x.getData.get(doubles)
+      Vectors.dense(doubles)
+    }.toList
+    new util.ArrayList(predict(inputs).map(x => new SerializableString(x.toString)))
   }
 
   def predict(x: List[Vector]): List[Float]
@@ -52,6 +54,7 @@ abstract class MLlibContainer extends SparkModelContainer {
   override def predict(xs: List[Vector]): List[Float]
 
 }
+
 abstract class PipelineModelContainer extends SparkModelContainer {
 
   def init(sc: SparkContext, model: sparkml.PipelineModel): this.type
@@ -59,16 +62,22 @@ abstract class PipelineModelContainer extends SparkModelContainer {
   override def predict(xs: List[Vector]): List[Float]
 
 }
-case class MLeapModel(transformer: mleap.runtime.transformer.Transformer, bundlePath:String) {
+
+case class MLeapModel(transformer: mleap.runtime.transformer.Transformer, bundlePath: String) {
+
   import mleap.runtime.{LeapFrame, Row, LocalDataset, Dataset}
   import ml.combust.mleap.core.util.VectorConverters
   import org.apache.spark.ml.linalg.Vector
+
   def predict(rows: Seq[Vector]): Seq[Double] = {
-    val frame = LeapFrame(transformer.inputSchema, LocalDataset(rows.map(features=>Row(VectorConverters.sparkVectorToMleapTensor(features)))))
-    val out: Dataset = transformer.transform(frame).get.dataset
-    out.map {row => row.last.asInstanceOf[Double]}.toSeq
+    val frame = LeapFrame(transformer.inputSchema, LocalDataset(rows.map { features =>
+      Row(VectorConverters.sparkVectorToMleapTensor(features))
+    }))
+    transformer.transform(frame).get.dataset.map(_.last.asInstanceOf[Double]).toSeq
   }
-  def predict(features: Vector) : Double = predict(List(features)).head
+
+  def predict(features: Vector): Double = predict(List(features)).head
+
   def save(path: String): Unit = {
     new File(path).mkdirs()
     // assume path is directory
@@ -94,6 +103,7 @@ object MLeapModel {
     }
     apply(path)
   }
+
   def apply(path: String): MLeapModel = {
     val bundlePath: String = s"jar:file:$path${if (path.endsWith(".zip")) "" else "/bundle.zip"}"
     import mleap.runtime.MleapSupport._
@@ -105,6 +115,7 @@ object MLeapModel {
     apply(transformer, bundlePath)
   }
 }
+
 //case class MLeapNativeModel(transformer: mleap.runtime.transformer.Transformer, path: String) extends MLeapModel
 //case class MLeapSparkModel(sparkTransformer: sparkml.Transformer, dataset: Dataset[_])  extends MLeapModel {
 //  import mleap.spark.SparkSupport._
@@ -128,12 +139,18 @@ object MLeapModel {
 
 class MLeapModelBundleContainer extends SparkModelContainer {
   var model: Option[MLeapModel] = None
-  def init(model: MLeapModel): this.type = {this.model = Some(model); this}
+
+  def init(model: MLeapModel): this.type = {
+    this.model = Some(model);
+    this
+  }
+
   override def predict(xs: List[Vector]): List[Float] = model.get.predict(xs.map(_.asML)).map(_.toFloat).toList
 }
 
 sealed abstract class MLlibModel {
   def predict(features: Vector): Double
+
   def save(sc: SparkContext, path: String): Unit
 }
 
@@ -141,7 +158,7 @@ sealed abstract class MLlibModel {
 
 // LogisticRegressionModel
 case class MLlibLogisticRegressionModel(model: LogisticRegressionModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -177,7 +194,7 @@ case class MLlibNaiveBayesModel(model: NaiveBayesModel) extends MLlibModel {
 
 // BisectingKMeansModel
 case class MLlibBisectingKMeansModel(model: BisectingKMeansModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -189,7 +206,7 @@ case class MLlibBisectingKMeansModel(model: BisectingKMeansModel)
 
 // GaussianMixtureModel
 case class MLlibGaussianMixtureModel(model: GaussianMixtureModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -284,7 +301,7 @@ case class MLlibKMeansModel(model: KMeansModel) extends MLlibModel {
 
 // MatrixFactorizationModel
 case class MLlibMatrixFactorizationModel(model: MatrixFactorizationModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     val userId = features(0).toInt
     val productId = features(1).toInt
@@ -300,7 +317,7 @@ case class MLlibMatrixFactorizationModel(model: MatrixFactorizationModel)
 
 // IsotonicRegressionModel
 case class MLlibIsotonicRegressionModel(model: IsotonicRegressionModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features(0))
   }
@@ -323,7 +340,7 @@ case class MLlibLassoModel(model: LassoModel) extends MLlibModel {
 
 // LinearRegressionModel
 case class MLlibLinearRegressionModel(model: LinearRegressionModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -335,7 +352,7 @@ case class MLlibLinearRegressionModel(model: LinearRegressionModel)
 
 // RidgeRegressionModel
 case class MLlibRidgeRegressionModel(model: RidgeRegressionModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -349,7 +366,7 @@ case class MLlibRidgeRegressionModel(model: RidgeRegressionModel)
 
 // DecisionTreeModel
 case class MLlibDecisionTreeModel(model: DecisionTreeModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -361,7 +378,7 @@ case class MLlibDecisionTreeModel(model: DecisionTreeModel)
 
 // RandomForestModel
 case class MLlibRandomForestModel(model: RandomForestModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -373,7 +390,7 @@ case class MLlibRandomForestModel(model: RandomForestModel)
 
 // GradientBoostedTreesModel
 case class MLlibGradientBoostedTreesModel(model: GradientBoostedTreesModel)
-    extends MLlibModel {
+  extends MLlibModel {
   override def predict(features: Vector): Double = {
     model.predict(features)
   }
@@ -387,7 +404,7 @@ object MLlibLoader {
   def metadataPath(path: String): String = s"$path/metadata"
 
   def getModelClassName(sc: SparkContext, path: String): String = {
-//    val str = sc.textFile(metadataPath(path)).take(1)(0)
+    //    val str = sc.textFile(metadataPath(path)).take(1)(0)
     val str = sc.textFile(metadataPath(path)).collect()
     println(s"ALL METADATA:")
     str.foreach(println(_))

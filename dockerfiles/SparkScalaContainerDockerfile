@@ -15,20 +15,20 @@ ADD ./containers/jvm/pom.xml /root/container/
 
 WORKDIR /root/container
 
-RUN ["mvn","verify","clean","--fail-never"]
+# RUN ["mvn","verify","clean","--fail-never"]
 
-RUN ["mvn","dependency:go-offline","--fail-never"]
+# RUN ["mvn","dependency:go-offline","--fail-never"]
 
-COPY ./containers/jvm/ /root/container
-
+# COPY ./containers/jvm/ /root/container
+COPY ./containers/jvm/spark-container-impl/target/spark-container-impl-0.1.jar /root/container/spark-container-impl/target/spark-container-impl-0.1.jar
 WORKDIR /root/container
 
-RUN mkdir -p /model \
-      && cd /root/container \
-      && mvn clean package -DskipTests
+# RUN mkdir -p /model \
+#       && cd /root/container \
+#       && mvn clean package -DskipTests
 
 ENV CLIPPER_MODEL_PATH=/model
 
-CMD ["java", "-Djava.library.path=/usr/local/lib", "-Xmx512m", "-cp", "/root/container/spark-container-impl/target/spark-container-impl-0.1.jar", "ai.clipper.spark.container.impl.ContainerMain"]
+CMD ["java", "-Djava.library.path=/usr/local/lib", "-Xmx512m", "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005", "-cp", "/root/container/spark-container-impl/target/spark-container-impl-0.1.jar", "ai.clipper.spark.container.impl.ContainerMain"]
 
 # vim: set filetype=dockerfile:
