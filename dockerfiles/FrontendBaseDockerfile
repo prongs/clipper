@@ -1,0 +1,18 @@
+ARG CODE_VERSION
+FROM clipper/lib_base:${CODE_VERSION}
+
+# Build Clipper
+
+ADD ./CMakeLists.txt /clipper/
+ADD ./configure /clipper/
+ADD ./cmake /clipper/cmake
+ADD src /clipper/src
+RUN cd /clipper/src/libs/spdlog && rm -rf .git && git init && git apply ../patches/make_spdlog_compile_linux.patch
+WORKDIR /clipper/
+RUN ./configure --cleanup-quiet
+RUN ./configure --release
+WORKDIR release
+
+RUN make clipper
+
+# vim: set filetype=dockerfile:

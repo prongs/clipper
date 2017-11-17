@@ -207,7 +207,7 @@ def deploy_pyspark_model(
               "w") as metadata_file:
         json.dump({"model_class": model_class}, metadata_file)
 
-    logger.info("Spark model saved")
+    logger.info("Spark model saved to " + spark_model_save_loc)
 
     # Deploy model
     clipper_conn.build_and_deploy_model(name, version, input_type,

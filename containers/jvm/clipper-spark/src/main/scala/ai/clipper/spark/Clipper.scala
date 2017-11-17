@@ -21,6 +21,7 @@ sealed trait ModelType extends Serializable
 case object MLlibModelType extends ModelType
 
 case object PipelineModelType extends ModelType
+case object MLeapBundleModelType extends ModelType
 
 object ModelTypeSerializer
     extends CustomSerializer[ModelType](
@@ -29,9 +30,11 @@ object ModelTypeSerializer
           {
             case JString("MLlibModelType") => MLlibModelType
             case JString("PipelineModelType") => PipelineModelType
+            case JString("MLeapBundleModelType") => MLeapBundleModelType
           }, {
             case MLlibModelType => JString("MLlibModelType")
             case PipelineModelType => JString("PipelineModelType")
+            case MLeapBundleModelType => JString("MLeapBundleModelType")
           }
       ))
 
@@ -46,14 +49,13 @@ case class ClipperContainerConf(var className: String,
                                 var replClassDir: Option[String] = None)
 
 object Clipper {
-
   val CLIPPER_CONF_FILENAME: String = "clipper_conf.json"
   val CONTAINER_JAR_FILE: String = "container_source.jar"
   val MODEL_DIRECTORY: String = "model"
   val REPL_CLASS_DIR: String = "repl_classes"
   val CLIPPER_SPARK_CONTAINER_NAME = "clipper/spark-scala-container"
 
-  val DOCKER_NW: String = "clipper_nw"
+  val DOCKER_NW: String = "clipper_network"
   val CLIPPER_MANAGEMENT_PORT: Int = 1338
 
   val CLIPPER_DOCKER_LABEL: String = "ai.clipper.container.label";
@@ -90,11 +92,11 @@ object Clipper {
     */
   def deploySparkModel[M](sc: SparkContext,
                           name: String,
-                          version: Int,
+                          version: String,
                           model: M,
                           containerClass: Class[_],
                           clipperHost: String,
-                          labels: List[String],
+                          labels: List[String] = List(),
                           sshUserName: Option[String] = None,
                           sshKeyPath: Option[String] = None,
                           dockerRequiresSudo: Boolean = true): Unit = {
@@ -142,9 +144,12 @@ object Clipper {
   }
 
   private def startSparkContainerLocal(name: String,
-                                       version: Int,
+                                       version: String,
                                        modelDataPath: String): Unit = {
     println(s"MODEL_DATA_PATH: $modelDataPath")
+    val dockerContainers: String = Seq("docker", "ps").!!
+    val queryFrontendContainer = dockerContainers.split("\n").filter(_.contains("query_frontend")).head.split(" ").last
+    println(s"query frontend container name: $queryFrontendContainer")
     val startContainerCmd = Seq(
       "docker",
       "run",
@@ -153,18 +158,19 @@ object Clipper {
       "-v", s"$modelDataPath:/model:ro",
       "-e", s"CLIPPER_MODEL_NAME=$name",
       "-e", s"CLIPPER_MODEL_VERSION=$version",
-      "-e", "CLIPPER_IP=query_frontend",
+      "-e", s"CLIPPER_IP=$queryFrontendContainer",
       "-e", "CLIPPER_INPUT_TYPE=doubles",
       "-l", s"$CLIPPER_DOCKER_LABEL",
       CLIPPER_SPARK_CONTAINER_NAME
     )
+    println(s"starting container with command ${startContainerCmd.mkString(" ")}")
     if (startContainerCmd.! != 0) {
-      throw new ModelDeploymentError("Error starting model container")
+      throw new ModelDeploymentError(s"Error starting model container. Command: $startContainerCmd")
     }
   }
 
   private def startSparkContainerRemote(name: String,
-                                        version: Int,
+                                        version: String,
                                         clipperHost: String,
                                         modelDataPath: String,
                                         sshUserName: String,
@@ -214,7 +220,7 @@ object Clipper {
 
   private def publishModelToClipper(host: String,
                                     name: String,
-                                    version: Int,
+                                    version: String,
                                     labels: List[String],
                                     hostModelDataPath: String): Unit = {
     val data = Map(
@@ -265,7 +271,7 @@ object Clipper {
 
   private[clipper] def saveSparkModel[M](sc: SparkContext,
                                          name: String,
-                                         version: Int,
+                                         version: String,
                                          model: M,
                                          containerClass: Class[_],
                                          basePath: String): Unit = {
@@ -275,8 +281,9 @@ object Clipper {
         "Clipper cannot deploy models from Spark Shell")
     }
     val modelPath = Paths.get(basePath, MODEL_DIRECTORY).toString
+
     val modelType = model match {
-      case m: MLlibModel => {
+      case m: MLlibModel =>
         m.save(sc, modelPath)
         // Because I'm not sure how to do it in the type system, check that
         // the container is of the right type
@@ -284,27 +291,33 @@ object Clipper {
         try {
           containerClass.newInstance.asInstanceOf[MLlibContainer]
         } catch {
-          case e: ClassCastException => {
+          case e: ClassCastException =>
             throw new IllegalArgumentException(
               "Error: Container must be a subclass of MLlibContainer")
-          }
         }
         MLlibModelType
-      }
-      case p: PipelineModel => {
+      case p: PipelineModel =>
         p.save(modelPath)
         // Because I'm not sure how to do it in the type system, check that
         // the container is of the right type
         try {
           containerClass.newInstance.asInstanceOf[PipelineModelContainer]
         } catch {
-          case e: ClassCastException => {
+          case e: ClassCastException =>
             throw new IllegalArgumentException(
               "Error: Container must be a subclass of PipelineModelContainer")
-          }
         }
         PipelineModelType
-      }
+      case l: MLeapModel =>
+        l.save(modelPath)
+        try {
+          containerClass.asSubclass(classOf[MLeapModelBundleContainer])
+        } catch {
+          case e: ClassCastException =>
+            throw new IllegalArgumentException(
+              "Error: Container must be a subclass of PipelineModelContainer")
+        }
+        MLeapBundleModelType
       case _ =>
         throw new IllegalArgumentException(
           s"Illegal model type: ${model.getClass.getName}")
@@ -317,6 +330,9 @@ object Clipper {
     Files.copy(jarPath, Paths.get(basePath, copiedJarName), REPLACE_EXISTING)
     val conf =
       ClipperContainerConf(containerClass.getName, copiedJarName, modelType)
+    println("CONF:" + conf)
+    println(write(conf))
+    println("---------------------------------------------")
     getReplOutputDir(sc) match {
       case Some(classSourceDir) => {
         throw new UnsupportedOperationException("Clipper does not support deploying models directly from the Spark REPL")
@@ -344,7 +360,7 @@ object Clipper {
   }
 
   private[clipper] def loadSparkModel(
-      sc: SparkContext,
+      sc: =>SparkContext,
       basePath: String): SparkModelContainer = {
     val confString = Files
       .readAllLines(Paths.get(basePath, CLIPPER_CONF_FILENAME),
@@ -356,40 +372,19 @@ object Clipper {
     val modelPath = Paths.get(basePath, MODEL_DIRECTORY).toString
     println(s"Model path: $modelPath")
 
+    val instance = classLoader
+      .loadClass(conf.className)
+      .newInstance()
     conf.modelType match {
-      case MLlibModelType => {
-        val model = MLlibLoader.load(sc, modelPath)
-        try {
-          val container = classLoader
-            .loadClass(conf.className)
-            .newInstance()
-            .asInstanceOf[MLlibContainer]
-          container.init(sc, model)
-          container.asInstanceOf[SparkModelContainer]
-        } catch {
-          case e: Throwable => {
-            e.printStackTrace
-            throw e
-          }
-
-        }
-      }
-      case PipelineModelType => {
-        val model = PipelineModel.load(modelPath)
-        try {
-        val container = classLoader
-          .loadClass(conf.className)
-          .newInstance()
-          .asInstanceOf[PipelineModelContainer]
-        container.init(sc, model)
-        container.asInstanceOf[SparkModelContainer]
-        } catch {
-          case e: Throwable => {
-            e.printStackTrace
-            throw e
-          }
-        }
-      }
+      case MLlibModelType =>
+        instance.asInstanceOf[MLlibContainer]
+          .init(sc, MLlibLoader.load(sc, modelPath))
+      case PipelineModelType =>
+        instance.asInstanceOf[PipelineModelContainer]
+          .init(sc, PipelineModel.load(modelPath))
+      case MLeapBundleModelType =>
+        instance.asInstanceOf[MLeapModelBundleContainer]
+          .init(MLeapModel(modelPath))
     }
   }
 
@@ -397,5 +392,9 @@ object Clipper {
                              conf: ClipperContainerConf): ClassLoader = {
     new URLClassLoader(Array(Paths.get(path, conf.jarName).toUri.toURL),
                        getClass.getClassLoader)
+  }
+
+  def benchmark():Unit = {
+
   }
 }

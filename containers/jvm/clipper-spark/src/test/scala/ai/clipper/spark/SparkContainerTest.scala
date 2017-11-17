@@ -23,9 +23,10 @@ class TestContainer extends MLlibContainer {
 
   var model: Option[MLlibModel] = None
 
-  override def init(sc: SparkContext, m: MLlibModel) {
+  override def init(sc: SparkContext, m: MLlibModel): this.type = {
     println("Initializing container")
     model = Some(m)
+    this
   }
 
   override def predict(xs: List[Vector]): List[Float] = {
@@ -55,7 +56,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
       .run(data))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "logistic_regression_test", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "logistic_regression_test", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibLogisticRegressionModel]
     beforeSaveModel.model.intercept shouldEqual afterSaveModel.model.intercept
@@ -69,7 +70,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibSVMModel(SVMWithSGD.train(data, 50))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "svm_test", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "svm_test", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibSVMModel]
     beforeSaveModel.model.intercept shouldEqual afterSaveModel.model.intercept
@@ -83,7 +84,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
 
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "naive_bayes_test", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "naive_bayes_test", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibNaiveBayesModel]
     beforeSaveModel.model.labels shouldEqual afterSaveModel.model.labels
@@ -101,7 +102,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
 
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "bisecting_kmeans_test", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "bisecting_kmeans_test", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibBisectingKMeansModel]
     beforeSaveModel.model.clusterCenters shouldEqual afterSaveModel.model.clusterCenters
@@ -116,7 +117,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
 
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "gaussian_mixture_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "gaussian_mixture_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibGaussianMixtureModel]
     beforeSaveModel.model.weights shouldEqual afterSaveModel.model.weights
@@ -136,7 +137,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
 
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "kmeans_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "kmeans_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibKMeansModel]
     beforeSaveModel.model.clusterCenters shouldEqual afterSaveModel.model.clusterCenters
@@ -154,7 +155,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibMatrixFactorizationModel(ALS.train(ratings, rank, numIterations, 0.01))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "matrix_factorization_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "matrix_factorization_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibMatrixFactorizationModel]
 
@@ -187,7 +188,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibIsotonicRegressionModel(new IsotonicRegression().setIsotonic(true).run(parsedData))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "isotonic_regression_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "isotonic_regression_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibIsotonicRegressionModel]
     beforeSaveModel.model.boundaries shouldEqual afterSaveModel.model.boundaries
@@ -206,7 +207,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibLassoModel(LassoWithSGD.train(parsedData, numIterations))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "lasso_regression_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "lasso_regression_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibLassoModel]
     beforeSaveModel.model.weights shouldEqual afterSaveModel.model.weights
@@ -225,7 +226,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibLinearRegressionModel(LinearRegressionWithSGD.train(parsedData, numIterations))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "linear_regression_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "linear_regression_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibLinearRegressionModel]
     beforeSaveModel.model.weights shouldEqual afterSaveModel.model.weights
@@ -244,7 +245,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibRidgeRegressionModel(RidgeRegressionWithSGD.train(parsedData, numIterations))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "ridge_regression_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "ridge_regression_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibRidgeRegressionModel]
     beforeSaveModel.model.weights shouldEqual afterSaveModel.model.weights
@@ -265,7 +266,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibDecisionTreeModel(model)
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "decision_tree_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "decision_tree_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibDecisionTreeModel]
     beforeSaveModel.model.topNode.impurity shouldEqual afterSaveModel.model.topNode.impurity
@@ -288,7 +289,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
       numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "random_forest_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "random_forest_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibRandomForestModel]
     for (i <- 0 until beforeSaveModel.model.trees.length) {
@@ -308,7 +309,7 @@ class MLLibModelSuite extends FunSuite with BeforeAndAfter with Matchers with Sh
     val beforeSaveModel = MLlibGradientBoostedTreesModel(GradientBoostedTrees.train(data, boostingStrategy))
     val beforeSaveContainer = new TestContainer
     beforeSaveContainer.init(sc, beforeSaveModel)
-    Clipper.saveSparkModel(sc, "gradient_boosted_trees_model", 1, beforeSaveModel, classOf[TestContainer], saveDir.toString)
+    Clipper.saveSparkModel(sc, "gradient_boosted_trees_model", "1", beforeSaveModel, classOf[TestContainer], saveDir.toString)
     val afterSaveContainer = Clipper.loadSparkModel(sc, saveDir.toString)
     val afterSaveModel = afterSaveContainer.asInstanceOf[TestContainer].model.get.asInstanceOf[MLlibGradientBoostedTreesModel]
     for (i <- 0 until beforeSaveModel.model.trees.length) {

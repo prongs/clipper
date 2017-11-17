@@ -207,12 +207,14 @@ create_image () {
     time docker build --build-arg CODE_VERSION=$sha_tag -t $namespace/$image:$sha_tag \
         -f dockerfiles/$dockerfile $CLIPPER_ROOT
     docker tag $namespace/$image:$sha_tag $namespace/$image:$version_tag
+    docker tag $namespace/$image:$sha_tag $namespace/$image:latest
 
     if [ "$publish" = true ] && [ "$public" = true ] ; then
         echo "Publishing $namespace/$image:$sha_tag"
         docker push $namespace/$image:$sha_tag
         echo "Publishing $namespace/$image:$version_tag"
         docker push $namespace/$image:$version_tag
+        docker push $namespace/$image:latest
 
         # If the version is normal versioned release (not develop and not a release candidate),
         # We also tag and publish an image tagged
@@ -227,8 +229,41 @@ create_image () {
         fi
     fi
 }
+build_frontend() {
+    # True and false indicate whether or not to publish the image. We publish public images.
+    local private=false
+    local public=true
+
+    create_image lib_base ClipperLibBaseDockerfile $private
+    create_image frontend_base FrontendBaseDockerfile $private
+    create_image query_frontend QueryFrontendDockerfile $public &
+    create_image management_frontend ManagementFrontendDockerfile $public &
+    wait
+}
 
 
+build_scala_container() {
+    # True and false indicate whether or not to publish the image. We publish public images.
+    local private=false
+    local public=true
+
+    cd containers/jvm
+    mvn package -DskipTests
+    cd -
+    create_image spark-scala-container SparkScalaContainerDockerfile $public
+}
+
+build_python_containers() {
+    local private=false
+    local public=true
+    create_image py-rpc RPCDockerfile $public
+    create_image sum-container SumDockerfile  $private &
+    create_image noop-container NoopDockerfile $public &
+    create_image python-closure-container PyClosureContainerDockerfile $public &
+    create_image pyspark-container PySparkContainerDockerfile $public &
+    create_image tf_cifar_container TensorFlowCifarDockerfile $public &
+    wait
+}
 # Build the Clipper Docker images.
 build_images () {
     # True and false indicate whether or not to publish the image. We publish public images.
@@ -241,22 +276,13 @@ build_images () {
     ###########################################################################
 
     # Build Clipper core images
-    create_image lib_base ClipperLibBaseDockerfile $private
-    create_image query_frontend QueryFrontendDockerfile $public
-    create_image management_frontend ManagementFrontendDockerfile $public
-    create_image unittests ClipperTestsDockerfile  $private
-
-    # Build containers
-    create_image spark-scala-container SparkScalaContainerDockerfile $public
-    create_image r-container-base RContainerDockerfile $public
-
-    # First build Python base image
-    create_image py-rpc RPCDockerfile $public
-    create_image sum-container SumDockerfile  $private
-    create_image noop-container NoopDockerfile $public
-    create_image python-closure-container PyClosureContainerDockerfile $public
-    create_image pyspark-container PySparkContainerDockerfile $public
-    create_image tf_cifar_container TensorFlowCifarDockerfile $public
+    build_frontend &
+    build_scala_container &
+    wait
+    build_python_containers &
+    create_image r-container-base RContainerDockerfile $public &
+    #create_image unittests ClipperTestsDockerfile  $private
+    wait
 }
 
 

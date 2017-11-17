@@ -12,7 +12,7 @@ public class RPCProtocolTest {
     String clipperAddress = "localhost";
     int clipperPort = 7000;
     try {
-      rpc.start(testModel, "rpctest_java", 1, clipperAddress, clipperPort);
+      rpc.start(testModel, "rpctest_java", "1", clipperAddress, clipperPort);
     } catch (UnknownHostException e) {
       e.printStackTrace();
     }

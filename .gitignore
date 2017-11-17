@@ -19,3 +19,8 @@ dependency-reduced-pom.xml
 *.iml
 
 docker-compose.yml
+
+# data
+examples/tutorial/*.data
+examples/tutorial/cifar-10*
+

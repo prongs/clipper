@@ -43,8 +43,23 @@
     <dependency>
       <groupId>com.holdenkarau</groupId>
       <artifactId>spark-testing-base_${scala.compat.version}</artifactId>
-      <version>${spark.version}_0.6.0</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>ml.combust.mleap</groupId>
+      <artifactId>mleap-runtime_${scala.binary.version}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ml.combust.mleap</groupId>
+      <artifactId>mleap-core_${scala.binary.version}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ml.combust.mleap</groupId>
+      <artifactId>mleap-spark_${scala.binary.version}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.jsuereth</groupId>
+      <artifactId>scala-arm_${scala.binary.version}</artifactId>
     </dependency>
   </dependencies>
 
